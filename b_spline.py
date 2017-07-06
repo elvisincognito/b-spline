@@ -1,154 +1,178 @@
+'''
+GenCG
+Abgabe 3
+ss17
+B-Spline-Kurve
+by jberl001
+'''
+
 from Tkinter import *
 from Canvas import *
 import sys
+import numpy as np
 
-WIDTH  = 400 # width of canvas
-HEIGHT = 400 # height of canvas
+WIDTH = 400  # width of canvas
+HEIGHT = 400  # height of canvas
+HPSIZE = 1  # half of point size (must be integer)
+CCOLOR = "#0000FF"  # blue (color of control-points and polygon)
+BCOLOR = "#000000"  # black (color of bezier curve)
+BWIDTH = 1  # width of bezier curve
 
-HPSIZE = 2 # half of point size (must be integer)
-CCOLOR = "#0000FF" # blue (color of control-points and polygon)
+controlpoints = []  # list of (control-)points
+deboorpoints = []  # list of (control-)points
+elementList = []  # list of elements (used by Canvas.delete(...))
 
-BCOLOR = "#000000" # black (color of bezier curve)
-BWIDTH = 2 # width of bezier curve
-
-pointList = []   # list of (control-)points
-elementList = [] # list of elements (used by Canvas.delete(...))
-
-M = -1	#Derzeite Anzahl Kontrollpunkte
-maxM = 20	#Maximale Anzahl Kontrollpunkte
-#order = 4
-#degree = order - 1
+k = 4  # degree
+max_points = 4  # maximum number of points
 
 
-def drawPoints():
-    """ draw (control-)points """
-    for p in pointList:
-		element = can.create_oval(p[0]-HPSIZE, p[1]-HPSIZE, p[0]+HPSIZE, p[1]+HPSIZE, fill=CCOLOR, outline=CCOLOR)
+def drawPoints(points, color):
+	for p in points:
+		element = can.create_oval(p[0]-HPSIZE, p[1]-HPSIZE, p[0]+HPSIZE, p[1]+HPSIZE, fill=color, outline=color)
 		elementList.append(element)
 
 
-def drawPolygon():
-    """ draw (control-)polygon conecting (control-)points """
-    if len(pointList) > 1:
-        for i in range(len(pointList)-1):
-            element = can.create_line(pointList[i][0], pointList[i][1], pointList[i+1][0], pointList[i+1][1], fill=CCOLOR)
-            elementList.append(element)
+def drawPolygon(points, color):
+	if len(points) > 1:
+		for i in range(len(points)-1):
+			element = can.create_line(points[i][0], points[i][1], points[i + 1][0], points[i + 1][1], fill=color)
+			elementList.append(element)
 
 
-def drawBezierCurve():
-    """ draw bezier curve defined by (control-)points """
-    print "drawBezierCurve() not yet implemented..."
-    print "curve should have color: ", BCOLOR, " and width: ", BWIDTH
+def knotVector(knotvector, t):
+	temp_v_idx = 0
+	for idx in range(0, len(knotvector)-1):
+		if knotvector[idx] <= t:
+			temp_v_idx = idx
+	return temp_v_idx
 
+
+def deboor(k, points, knotvector, t, j):
+	r = knotVector(knotvector, t)
+	i = r-k+(1+j)
+	if len(points) == 1:
+		return points[0]
+	newPoints = []
+	if j == 1:
+		while i <= r:
+			alpha = ((t-knotvector[i]) * 1.0) / ((knotvector[i-j+k]) - knotvector[i]) * 1.0
+			x = points[i-1][0]
+			y = points[i-1][1]
+			if i < len(controlpoints):
+				next_x = points[i][0]
+				next_y = points[i][1]
+			else:
+				next_x = points[i-1][0]
+				next_y = points[i-1][1]
+			bx = (1 - alpha) * x + alpha * next_x
+			by = (1 - alpha) * y + alpha * next_y
+			b = [bx, by]
+			newPoints.append(b)
+			i += 1
+	else:
+		for idx in range(0, len(points)-1):
+			alpha = ((t-knotvector[i]) * 1.0) / ((knotvector[i-j+k])-knotvector[i]) * 1.0
+			x = points[idx][0]
+			y = points[idx][1]
+			next_x = points[idx+1][0]
+			next_y = points[idx+1][1]
+			bx = (1-alpha) * x+alpha * next_x
+			by = (1-alpha) * y+alpha * next_y
+			b = [bx, by]
+			newPoints.append(b)
+			i += 1
+	return deboor(k, newPoints, knotvector, t, j+1)
+
+
+def degree_update(new):
+	global k
+	k = int(new)
+	draw()
+
+
+def max_update(new):
+	global max_points
+	max_points = int(new)
+	draw()
 
 
 def quit(root=None):
-    """ quit programm """
-    if root==None:
-        sys.exit(0)
-    root._root().quit()
-    root._root().destroy()
+	""" quit programm """
+	if root == None:
+		sys.exit(0)
+	root._root().quit()
+	root._root().destroy()
 
 
 def draw():
-    """ draw elements """
-    can.delete(*elementList)
-    drawPoints()
-    drawPolygon()
-    #drawBezierCurve()
-    draw_deboor()
-    #script 285
-    #knotvector = [x for x in range(0, len(pointList)+order+1)]
+	""" draw elements """
+	global deboorpoints
+	can.delete(*elementList)
+	deboorpoints = []
+	drawPoints(controlpoints, CCOLOR)
+	drawPolygon(controlpoints, CCOLOR)
+	n = len(controlpoints)
+	if n >= k:
+		knotvector = []
+		knotvector.extend([0 for x in range(k)])
+		last_entry = len(controlpoints) - (k - 2)
+		knotvector.extend([x for x in range(1, last_entry)])
+		knotvector.extend([last_entry for x in range(k)])
+		j = 1
+		for t in range(0, max(knotvector) * 10):
+			point = deboor(k, controlpoints, knotvector, t/10.0, j)
+			deboorpoints.append(point)
+			drawPoints(deboorpoints, BCOLOR)
+	drawPolygon(deboorpoints, BCOLOR)
 
-
-def coefficent(t):
-	r = 0.0
-	if(t < 0.0):
-		t = -t
-	if(t < 1.0):
-		r = (3.0 * t * t * t -6.0 * t * t + 4.0) / 6.0
-	elif(t < 2.0):
-		r = -1.0 * (t - 2.0) * (t - 2.0) * (t - 2.0) / 6.0
-	else:
-		r = 0.0
-	return r;
-
-#def deboor(degree, controllPoints, knotvector, t):
-	#Intervall T faengt an bei K-1 (Ordnung-1) bis Index des letzten Punktes
-	#Grad ist die anzahl an Abschnitten die im Intervall gebildet werden koennen (Vernindung zwischen den Punkten)
-	
-#	return 0
-    
-def draw_deboor():
-	x = 0.0
-	y = 0.0   #Variablen fuer x- und y-Koordinaten
-	dt = 1.0/100.0 #Abstand zwischen den Punkten auf der Linie
-	c = 0.0
-	k = 0.0
-	if(M >= 1):
-		t = -1.0
-		while t < M:
-			x = 0.0
-			y = 0.0
-			j = -2
-			while j <= M+2.0:
-				k = j
-				if(k < 1):
-					k = 1
-				if(k > M):
-					k = M
-				c = coefficent(t - j)
-				print c
-				x += pointList[k][0] * c
-				y += pointList[k][1] * c
-				j += 1
-			t += dt
-			element = can.create_oval(x-1, y-1, x+1, y+1, fill=BCOLOR, outline=BCOLOR)
-			elementList.append(element)
-	i = 1
-	while i <= M:
-		element = can.create_oval(pointList[i][0]-2, pointList[i][1]-2, pointList[i][0]+2, pointList[i][1]+2, fill=CCOLOR, outline=CCOLOR)
-		elementList.append(element)
-		if(i != M):
-			element = can.create_line(pointList[i][0], pointList[i][1], pointList[i+1][0], pointList[i+1][1], fill=CCOLOR)
-			elementList.append(element)
-		i += 1
 
 def clearAll():
-    """ clear all (point list and canvas) """
-    can.delete(*elementList)
-    del pointList[:]
+	""" clear all (point list and canvas) """
+	can.delete(*elementList)
+	del controlpoints[:]
 
 
 def mouseEvent(event):
-    """ process mouse events """
-    global M
-    print "left mouse button clicked at ", event.x, event.y
-    pointList.append([event.x, event.y])
-    M += 1
-    draw()
+	""" process mouse events """
+	global controlpoints
+	print "left mouse button clicked at ", event.x, event.y
+	if len(controlpoints) < max_points:
+		controlpoints.append([event.x, event.y])
+	draw()
+
 
 if __name__ == "__main__":
-    #check parameters
-    if len(sys.argv) != 1:
-       print "pointViewerTemplate.py"
-       sys.exit(-1)
-    # create main window
-    mw = Tk()
-    # create and position canvas and buttons
-    cFr = Frame(mw, width=WIDTH, height=HEIGHT, relief="sunken", bd=1)
-    cFr.pack(side="top")
-    can = Canvas(cFr, width=WIDTH, height=HEIGHT)
-    can.bind("<Button-1>",mouseEvent)
-    can.pack()
-    cFr = Frame(mw)
-    cFr.pack(side="left")
-    bClear = Button(cFr, text="Clear", command=clearAll)
-    bClear.pack(side="left")
-    eFr = Frame(mw)
-    eFr.pack(side="right")
-    bExit = Button(eFr, text="Quit", command=(lambda root=mw: quit(root)))
-    bExit.pack()
-    # start
-    mw.mainloop()
-    
+	# check parameters
+	if len(sys.argv) != 1:
+		print "pointViewerTemplate.py"
+		sys.exit(-1)
+
+	# create main window
+	mw = Tk()
+	# create and position canvas and buttons
+	cFr = Frame(mw, width=WIDTH, height=HEIGHT, relief="sunken", bd=1)
+	cFr.pack(side="top")
+	can = Canvas(cFr, width=WIDTH, height=HEIGHT)
+	can.bind("<Button-1>", mouseEvent)
+	can.pack()
+	cFr = Frame(mw)
+	cFr.pack(side="left")
+	bClear = Button(cFr, text="Clear", command=clearAll)
+	bClear.pack(side="left")
+	eFr = Frame(mw)
+	eFr.pack(side="right")
+	bExit = Button(eFr, text="Quit", command=(lambda root=mw: quit(root)))
+	bExit.pack()
+	k_slider_label = Label(mw, text="Grad")
+	k_slider = Scale(mw, from_=2, to=20, orient=HORIZONTAL, command=degree_update)
+	k_slider.set(4)
+	max_slider_label = Label(mw, text="Max Points")
+	max_slider = Scale(mw, from_=4, to=100, orient=HORIZONTAL, command=max_update)
+	max_slider.set(20)
+	k_slider_label.pack()
+	k_slider.pack()
+	max_slider_label.pack()
+	max_slider.pack();
+	# start
+	
+mw.mainloop()
